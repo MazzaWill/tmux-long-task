@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# tmux-long-task: 在 tmux 中运行长任务，自动记录日志并定时汇报
+# tmux-long-task: 在 tmux 中运行长任务，自动记录快照并定时汇报
 # 用法: tmux-long-task <session-name> <command> [log-name]
 
 set -e
@@ -14,12 +14,12 @@ if [ -z "$SESSION_NAME" ] || [ -z "$COMMAND" ]; then
     exit 1
 fi
 
-LOG_DIR="$HOME/openclaw-logs"
-LOG_FILE="$LOG_DIR/$LOG_NAME.log"
-MARKER_FILE="$LOG_DIR/$LOG_NAME.lastline"
+SNAPSHOT_DIR="$HOME/openclaw-logs/snapshots"
+CURRENT_SNAPSHOT="$SNAPSHOT_DIR/$LOG_NAME.current"
+LAST_SNAPSHOT="$SNAPSHOT_DIR/$LOG_NAME.last"
 
-# 创建日志目录
-mkdir -p "$LOG_DIR"
+# 创建快照目录
+mkdir -p "$SNAPSHOT_DIR"
 
 # 如果 session 已存在，先杀掉
 if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
@@ -31,12 +31,15 @@ fi
 # 清理旧的 cron job（如果存在）
 openclaw cron rm "tmux-report-$LOG_NAME" 2>/dev/null || true
 
-# 创建新 session 并启动命令，使用 script 命令记录输出
+# 清理旧的快照
+rm -f "$CURRENT_SNAPSHOT" "$LAST_SNAPSHOT"
+
+# 创建新 session 并启动命令（不使用 script，直接运行）
 echo "创建 tmux session: $SESSION_NAME"
 tmux new-session -d -s "$SESSION_NAME"
 
-# 使用 script 命令将输出同时显示和记录到日志
-tmux send-keys -t "$SESSION_NAME" "script -q -a '$LOG_FILE' $COMMAND" C-m
+# 直接发送命令到 tmux，不使用 script 包裹
+tmux send-keys -t "$SESSION_NAME" "$COMMAND" C-m
 
 # 等待任务启动
 sleep 2
@@ -49,20 +52,21 @@ else
     exit 1
 fi
 
-echo "📄 日志文件: $LOG_FILE"
-echo "⏰ 等待日志输出..."
+echo "📸 快照目录: $SNAPSHOT_DIR"
+echo "⏰ 等待任务输出..."
 
-# 初始化上次汇报行数
-echo "0" > "$MARKER_FILE"
+# 初始化：创建初始快照
+tmux capture-pane -t "$SESSION_NAME" -p -S -200 > "$CURRENT_SNAPSHOT" 2>/dev/null || true
+cp "$CURRENT_SNAPSHOT" "$LAST_SNAPSHOT"
 
 # 添加 OpenClaw cron job（每 2 分钟汇报）
-# cron 会触发 subagent 读取日志并汇报
+# cron 会触发 reporter.sh 读取快照并汇报
 echo "添加 OpenClaw cron job..."
 
 openclaw cron add \
     --name "tmux-report-$LOG_NAME" \
     --every "2m" \
-    --message "读取日志文件 $LOG_FILE 的最后 100 行，检测任务状态（是否完成/有错误/卡住），输出汇报。日志目录: $HOME/openclaw-logs/" \
+    --message "执行 reporter.sh $LOG_NAME。session: $SESSION_NAME, 快照目录: $SNAPSHOT_DIR" \
     --session "isolated" \
     --timeout-seconds 60 \
     --description "tmux 任务进度汇报: $LOG_NAME" \
@@ -79,7 +83,7 @@ fi
 echo ""
 echo "=== 启动完成 ==="
 echo "Session: $SESSION_NAME"
-echo "日志: $LOG_FILE"
+echo "快照目录: $SNAPSHOT_DIR"
 echo "查看实时输出: tmux capture-pane -t $SESSION_NAME -p"
 echo ""
 echo "💡 任务进度会每 2 分钟自动汇报到这个频道"
