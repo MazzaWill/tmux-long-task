@@ -1,53 +1,53 @@
 # tmux-long-task
 
-在 tmux 中运行任意长任务，自动记录日志并通过 OpenClaw cron 每 2 分钟汇报进度。
+Run arbitrary long-running tasks in tmux with automatic logging and OpenClaw cron progress reporting every 2 minutes.
 
-## 功能
+## Features
 
-- 🎬 在 tmux 中运行长任务（Claude Code、Codex、Python 等）
-- 📝 自动将输出记录到日志文件
-- ⏰ OpenClaw cron 每 2 分钟自动汇报进度
-- 🔔 汇报直接发送到 Discord 频道
-- ✅ 自动检测任务完成/错误/卡住状态
+- 🎬 Run long tasks in tmux (Claude Code, Codex, Python, etc.)
+- 📝 Automatically log output to file
+- ⏰ OpenClaw cron reports progress every 2 minutes
+- 🔔 Reports sent directly to Discord channel
+- ✅ Auto-detect task completion/errors/stuck states
 
-## 快速开始
+## Quick Start
 
-### 1. 安装
+### 1. Install
 
 ```bash
-# 克隆仓库
+# Clone the repo
 git clone https://github.com/<your-org>/tmux-long-task.git
 
-# 或者添加到你的 skills 目录
+# Or link to your skills directory
 ln -s /path/to/tmux-long-task ~/.openclaw/workspace/skills/tmux-long-task
 ```
 
-### 2. 使用
+### 2. Usage
 
 ```bash
-# 启动 Claude Code 长任务
+# Start Claude Code long task
 ./tmux-long-task.sh claude "claude --print --permission-mode bypassPermissions"
 
-# 启动 Codex 长任务
+# Start Codex long task
 ./tmux-long-task.sh codex "codex"
 
-# 启动 Python 脚本
+# Start Python script
 ./tmux-long-task.sh scraper "python3 scraper.py"
 ```
 
-## 命令格式
+## Command Format
 
 ```
 ./tmux-long-task.sh <session-name> <command> [log-name]
 ```
 
-| 参数 | 说明 |
-|-----|------|
-| session-name | tmux session 名称 |
-| command | 要执行的命令（需用引号包裹） |
-| log-name | 日志文件名（可选，默认等于 session-name） |
+| Parameter | Description |
+|-----------|-------------|
+| session-name | tmux session name |
+| command | Command to execute (must be quoted) |
+| log-name | Log file name (optional, defaults to session-name) |
 
-## 输出示例
+## Output Example
 
 ```
 创建 tmux session: claude
@@ -64,37 +64,38 @@ Session: claude
 💡 任务进度会每 2 分钟自动汇报到这个频道
 ```
 
-## 文件结构
+## File Structure
 
 ```
 tmux-long-task/
-├── SKILL.md              # OpenClaw skill 说明
-├── README.md             # 本文件
-├── tmux-long-task.sh     # 主启动脚本
-└── reporter.sh          # 汇报脚本（由 cron 调用）
+├── SKILL.md              # OpenClaw skill definition
+├── README.md             # This file
+├── README_CN.md          # 中文版本
+├── tmux-long-task.sh     # Main startup script
+└── reporter.sh          # Reporter script (called by cron)
 ```
 
-## 日志位置
+## Log Location
 
-- **目录**: `~/openclaw-logs/`
-- **格式**: `<session-name>.log`
+- **Directory**: `~/openclaw-logs/`
+- **Format**: `<session-name>.log`
 
-## 手动命令
+## Manual Commands
 
 ```bash
-# 查看 tmux 状态
+# Check tmux status
 tmux list-sessions
 
-# 查看实时输出
+# View real-time output
 tmux capture-pane -t <session-name> -p
 
-# 查看日志
+# View log
 tail -f ~/openclaw-logs/<log-name>.log
 
-# 停止任务
+# Stop task
 tmux kill-session -t <session-name>
 
-# 停止 cron 汇报
+# Stop cron reporting
 openclaw cron rm "tmux-report-<log-name>"
 ```
 
