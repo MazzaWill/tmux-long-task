@@ -50,18 +50,18 @@ ln -s /path/to/tmux-long-task ~/.openclaw/workspace/skills/tmux-long-task
 ## Output Example
 
 ```
-创建 tmux session: claude
-✅ tmux 任务已成功启动
-📄 日志文件: /Users/xxx/openclaw-logs/claude.log
-⏰ 等待日志输出...
-✅ Cron job 已创建成功 (每2分钟通过 OpenClaw 汇报)
+Creating tmux session: claude
+✅ tmux task started successfully
+📄 Log file: /Users/xxx/openclaw-logs/claude.log
+⏰ Waiting for log output...
+✅ Cron job created (reporting every 2 minutes via OpenClaw)
 
-=== 启动完成 ===
+=== Startup Complete ===
 Session: claude
-日志: /Users/xxx/openclaw-logs/claude.log
-查看实时输出: tmux capture-pane -t claude -p
+Log: /Users/xxx/openclaw-logs/claude.log
+View real-time output: tmux capture-pane -t claude -p
 
-💡 任务进度会每 2 分钟自动汇报到这个频道
+💡 Task progress will be reported to this channel every 2 minutes
 ```
 
 ## File Structure
