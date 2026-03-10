@@ -60,13 +60,14 @@ tmux capture-pane -t "$SESSION_NAME" -p -S -200 > "$CURRENT_SNAPSHOT" 2>/dev/nul
 cp "$CURRENT_SNAPSHOT" "$LAST_SNAPSHOT"
 
 # 添加 OpenClaw cron job（每 2 分钟汇报）
-# cron 会触发 reporter.sh 读取快照并汇报
+# cron 会触发 isolated agent 执行 reporter.sh
+REPORTER_PATH="$(cd "$(dirname "$0")" && pwd)/reporter.sh"
 echo "添加 OpenClaw cron job..."
 
 openclaw cron add \
     --name "tmux-report-$LOG_NAME" \
     --every "2m" \
-    --message "执行 reporter.sh $LOG_NAME。session: $SESSION_NAME, 快照目录: $SNAPSHOT_DIR" \
+    --message "执行 $REPORTER_PATH $LOG_NAME。session: $SESSION_NAME, 快照目录: $SNAPSHOT_DIR" \
     --session "isolated" \
     --timeout-seconds 60 \
     --description "tmux 任务进度汇报: $LOG_NAME" \
