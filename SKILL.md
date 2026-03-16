@@ -1,99 +1,99 @@
 ---
 name: tmux-long-task
-description: 在 tmux 中运行任意长任务，自动快照监控并通过 OpenClaw cron 每 2 分钟汇报进度。适用于 Claude Code、Codex、Python 脚本等长任务。
+description: 在 tmux 中直接启动 Claude Code CLI、Codex、Python 脚本等长任务，并基于 tmux capture-pane 做快照监控；适用于“在 tmux 里跑命令，然后每 2 分钟汇报一次真实 pane 日志”的场景。用户明确要求 tmux 长任务、固定节奏进度汇报、持续监控 pane 输出时使用。
 ---
 
-# tmux 长任务执行 + 快照监控
+# tmux 长任务 SOP
 
-## 概述
+按下面流程执行，不要套额外 runner。
 
-本 skill 提供通用的 tmux 长任务执行方案：
-1. 在指定 tmux session 中运行任意长任务
-2. 使用 `tmux capture-pane` 持续抓取快照
-3. 通过 **OpenClaw cron** 每 2 分钟对比快照并汇报进度
+## 标准 SOP
 
-## 特点
+1. **直接在 tmux 里启动真实命令**
+   - 用 `tmux new-session -d -s <session>` 创建 session。
+   - 用 `tmux send-keys` 把真实命令送进去执行。
+   - 不要把命令再包一层 `job_runner.sh`。
+   - 对 Claude Code CLI，默认就是直接跑 `claude -p ...`。
 
-- **无日志落盘**：不依赖 `script` 命令（对 TUI 支持不好）
-- **快照对比**：每次 cron 触发时抓取 pane 内容，与上次对比
-- **智能过滤**：去除 ANSI 转义、spinner、噪音行
-- **自动检测**：检测任务完成/错误/卡住状态
+2. **初始化快照**
+   - 快照目录：`~/openclaw-logs/snapshots/`
+   - 用 `tmux capture-pane -t <session> -p -S -200` 抓取初始 pane 内容。
+   - 保存为 `<log-name>.current` 和 `<log-name>.last`。
 
-## 使用方法
+3. **每 2 分钟汇报一次**
+   - 用 OpenClaw `cron`（不是 shell 里瞎猜 CLI 参数）创建每 2 分钟任务。
+   - 监控逻辑：
+     - 检查 tmux session 是否仍存在
+     - 抓 pane 快照
+     - 对比上次快照
+     - 过滤空行、spinner、ANSI 噪音
+     - 给当前线程发送简短进度
+   - 如果 2 分钟内没明显变化，就明确说“仍在运行，过去 2 分钟无明显新进展”。
 
-### 基本命令格式
+4. **完成判定**
+   - 优先看 tmux pane 是否已经回到 shell prompt，或 session 已结束。
+   - 不要只靠 exit code 宣布业务成功。
+   - 完成时汇报最后一段有意义输出。
 
-```
-tmux-long-task <session-name> <command> [log-name]
-```
+5. **收尾**
+   - 用户要求清理时，再删除 tmux session 和监控 cron。
+   - 默认不要抢着自动删，避免用户还想回看 pane。
 
-### 示例
-
-```bash
-# 启动 Claude Code 长任务
-tmux-long-task claude "claude --print --permission-mode bypassPermissions"
-
-# 启动 Codex 长任务
-tmux-long-task codex "codex"
-
-# 启动 Python 脚本
-tmux-long-task scraper "python3 scraper.py"
-```
-
-## 工作流程
-
-### A. tmux 任务启动
-
-1. 如果 session 已存在，先终止
-2. 创建新 session 并执行命令（直接运行，不使用 script）
-3. 初始化快照
-
-### B. 快照监控
-
-- **快照目录**: `~/openclaw-logs/snapshots/`
-- **文件**: `<log-name>.current`, `<log-name>.last`
-- 每次 cron 触发时抓取 pane 内容（-S -200 保留 200 行 scrollback）
-
-### C. 定时汇报 (OpenClaw cron)
-
-1. 使用 `openclaw cron add` 创建定时任务
-2. 每 2 分钟触发 isolated agent
-3. agent 执行 reporter.sh：
-   - 用 `tmux capture-pane` 抓取当前 pane 内容
-   - 与上次快照对比
-   - 去除 ANSI、spinner、噪音
-   - 输出新增内容
-4. 任务完成后自动删除 cron job
-
-## 修改的文件
-
-| 文件 | 说明 |
-|-----|------|
-| `scripts/tmux-long-task.sh` | 主启动脚本，改用直接执行命令 |
-| `scripts/reporter.sh` | 汇报脚本，改用 capture-pane 快照对比 |
-
-## 手动命令
+## 启动命令模板
 
 ```bash
-# 查看 tmux 状态
-tmux list-sessions
-
-# 查看实时输出
-tmux capture-pane -t <session-name> -p
-
-# 查看快照目录
-ls -la ~/openclaw-logs/snapshots/
-
-# 停止任务
-tmux kill-session -t <session-name>
-
-# 停止 cron 汇报
-openclaw cron rm "tmux-report-<log-name>"
+tmux new-session -d -s "$SESSION"
+tmux send-keys -t "$SESSION" "$COMMAND" C-m
 ```
 
-## 状态检测
+Claude Code CLI 示例：
 
-汇报时会自动检测：
-- ✅ 完成: `complete`, `done`, `finished`, `success`, `sautéed for`, `已处理完毕`
-- ⚠️ 错误: `error`, `failed`, `exception`, `crash`
-- ⏸️ 卡住: 长时间无输出（会提示"过去 2 分钟没有明显新进展"）
+```bash
+SESSION="claude-task"
+COMMAND="claude -p --model sonnet '你的 prompt'"
+tmux new-session -d -s "$SESSION"
+tmux send-keys -t "$SESSION" "$COMMAND" C-m
+```
+
+## 监控要点
+
+### 查看 session 是否还活着
+
+```bash
+tmux has-session -t "$SESSION"
+```
+
+### 抓当前 pane 内容
+
+```bash
+tmux capture-pane -t "$SESSION" -p -S -200
+```
+
+### 判断任务是否结束
+
+出现下面任一情况即可认为 CLI 任务已结束：
+- pane 已回到 shell prompt
+- tmux session 已不存在
+- pane 中明确出现任务完成总结，随后回到提示符
+
+## 汇报格式
+
+默认发简洁中文：
+
+- **有新进展**：贴最后 10-20 行有意义的新输出
+- **无新进展**：`仍在运行，过去 2 分钟无明显新进展`
+- **已结束**：说明任务结束，并附最后关键输出摘要
+- **有错误**：直接贴关键错误行
+
+## 禁止事项
+
+- 不要用 `job_runner.sh` 再包一层
+- 不要把“进程退出码 0”当成“用户目标成功”
+- 不要写死 Discord 频道 id
+- 不要依赖 `script` 命令抓 TUI 日志
+- 不要在没确认 pane 内容的情况下说“完成了”
+
+## bundled scripts
+
+- `scripts/tmux-long-task.sh`：仅负责启动 tmux session + 初始化快照；不负责自己创建 cron
+- `scripts/reporter.sh`：只负责输出一次监控摘要，适合被 cron 或人工调用
